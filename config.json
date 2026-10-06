@@ -1,0 +1,55 @@
+{
+  "allowStationSwitch": true,
+  "useManifestDurations": true,
+  "stations": [
+    {
+      "id": "percussioni",
+      "name": "Percussioni",
+      "description": "percussioni varie",
+      "manifestUrl": "samples/percussioni.csv",
+      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
+      "repeat": true
+    },
+    {
+      "id": "basso",
+      "name": "Basso",
+      "description": "Linea di basso",
+      "manifestUrl": "samples/basso.csv",
+      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
+      "repeat": true
+    },
+    {
+      "id": "trombe",
+      "name": "Trombe",
+      "description": "Melodia ottoni",
+      "manifestUrl": "samples/trombe.csv",
+      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
+      "repeat": true
+    },
+    {
+      "id": "metronomo",
+      "name": "Metronomo",
+      "description": "Per essere a tempo",
+      "manifestUrl": "samples/metronomo.csv",
+      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
+      "repeat": true
+    }
+  ],
+  "timeSources": [
+    {
+      "name": "TimeAPI.io · UTC",
+      "url": "https://timeapi.io/api/Time/current/zone?timeZone=UTC",
+      "responsePath": "dateTime",
+      "timeZonePath": "timeZone"
+    },
+    {
+      "name": "WorldTimeAPI · UTC",
+      "url": "https://worldtimeapi.org/api/timezone/Etc/UTC",
+      "responsePath": "utc_datetime",
+      "timeZonePath": ""
+    }
+  ],
+  "resyncIntervalMs": 30000,
+  "requestTimeoutMs": 5000,
+  "localFallback": false
+}
