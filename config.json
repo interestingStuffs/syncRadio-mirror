@@ -49,7 +49,7 @@
       "timeZonePath": ""
     }
   ],
-  "resyncIntervalMs": 30000,
+  "resyncIntervalMs": 3000,
   "requestTimeoutMs": 5000,
   "localFallback": false
 }
