@@ -1,6 +1,15 @@
 {
   "allowStationSwitch": true,
+  "stationQueryParam": "station",
+  "playbackOffsetQueryParam": "offset",
   "useManifestDurations": true,
+  "customTimeSource": {
+    "name": "SyncRadio · UTC",
+    "url": "",
+    "responsePath": "utc",
+    "timeZonePath": "",
+    "responseFormat": "json"
+  },
   "stations": [
     {
       "id": "percussioni",
@@ -43,13 +52,20 @@
       "timeZonePath": "timeZone"
     },
     {
+      "name": "Cloudflare · UTC (fallback)",
+      "url": "https://www.cloudflare.com/cdn-cgi/trace",
+      "responsePath": "ts",
+      "timeZonePath": "",
+      "responseFormat": "text"
+    },
+    {
       "name": "WorldTimeAPI · UTC",
       "url": "https://worldtimeapi.org/api/timezone/Etc/UTC",
       "responsePath": "utc_datetime",
       "timeZonePath": ""
     }
   ],
-  "resyncIntervalMs": 30000,
+  "resyncIntervalMs": 15000,
   "requestTimeoutMs": 5000,
   "localFallback": false
 }

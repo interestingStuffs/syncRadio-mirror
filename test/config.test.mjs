@@ -36,17 +36,21 @@ test('carica e normalizza la configurazione con i valori predefiniti', async (t)
       name: ' Orologio ',
       url: 'https://time.example/api',
       responsePath: 'data.utc',
+      responseFormat: 'json',
     }],
   }));
 
   assert.deepEqual(await loadConfig(), {
     stations: [{ ...station }],
     allowStationSwitch: true,
+    stationQueryParam: null,
+    playbackOffsetQueryParam: null,
     timeSources: [{
       name: 'Orologio',
       url: 'https://time.example/api',
       responsePath: 'data.utc',
       timeZonePath: '',
+      responseFormat: 'json',
     }],
     resyncIntervalMs: 30000,
     requestTimeoutMs: 8000,
@@ -72,6 +76,71 @@ test('accetta una lista vuota di sorgenti e fallback locale disattivato', async 
   assert.equal(config.requestTimeoutMs, 2500);
   assert.equal(config.localFallback, false);
   assert.equal(config.useManifestDurations, false);
+});
+
+test('disattiva il servizio orario proprietario finché l’URL è vuoto', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    customTimeSource: {
+      name: 'SyncRadio · UTC',
+      url: '  ',
+      responsePath: 'utc',
+    },
+    timeSources: [{
+      name: 'Pubblico',
+      url: 'https://time.example/api',
+      responsePath: 'utc',
+    }],
+  }));
+
+  const config = await loadConfig();
+
+  assert.deepEqual(config.timeSources, [{
+    name: 'Pubblico',
+    url: 'https://time.example/api',
+    responsePath: 'utc',
+    timeZonePath: '',
+    responseFormat: 'json',
+  }]);
+});
+
+test('prova il servizio orario proprietario per primo quando configurato', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    customTimeSource: {
+      name: 'SyncRadio UTC',
+      url: 'https://clock.syncradio.example/api/time',
+      responsePath: 'data.utc',
+    },
+    timeSources: [{
+      name: 'Pubblico',
+      url: 'https://time.example/api',
+      responsePath: 'utc',
+    }],
+  }));
+
+  const config = await loadConfig();
+
+  assert.equal(config.timeSources[0].name, 'SyncRadio UTC');
+  assert.equal(config.timeSources[0].responsePath, 'data.utc');
+  assert.deepEqual(config.timeSources.map(({ name }) => name), ['SyncRadio UTC', 'Pubblico']);
+});
+
+test('valida URL e formato del servizio orario proprietario anche se attivato', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    customTimeSource: { url: 'file:///clock.json' },
+  }));
+  await assert.rejects(loadConfig(), /customTimeSource\.url deve usare HTTP o HTTPS/);
+
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    customTimeSource: {
+      url: 'https://clock.example/api',
+      responseFormat: 'xml',
+    },
+  }));
+  await assert.rejects(loadConfig(), /customTimeSource\.responseFormat deve essere "json" o "text"/);
 });
 
 test('rifiuta una risposta HTTP non riuscita', async (t) => {
@@ -100,6 +169,19 @@ test('rifiuta sorgenti orarie malformate o URL non HTTP', async (t) => {
   await assert.rejects(loadConfig(), /deve usare HTTP o HTTPS/);
 });
 
+test('rifiuta formati di risposta delle sorgenti orarie non supportati', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    timeSources: [{
+      name: 'Orologio',
+      url: 'https://time.example/api',
+      responsePath: 'utc',
+      responseFormat: 'xml',
+    }],
+  }));
+  await assert.rejects(loadConfig(), /responseFormat deve essere "json" o "text"/);
+});
+
 test('valida metadati, URL e ID univoci delle stazioni', async (t) => {
   mockConfig(t, jsonResponse({ stations: [] }));
   await assert.rejects(loadConfig(), /almeno una stazione/);
@@ -115,6 +197,35 @@ test('valida metadati, URL e ID univoci delle stazioni', async (t) => {
 
   mockConfig(t, jsonResponse({ stations: [station], allowStationSwitch: 'true' }));
   await assert.rejects(loadConfig(), /allowStationSwitch.*true o false/);
+});
+
+test('valida e normalizza il parametro URL per la selezione della stazione', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], stationQueryParam: '  radio  ' }));
+  assert.equal((await loadConfig()).stationQueryParam, 'radio');
+
+  mockConfig(t, jsonResponse({ stations: [station], stationQueryParam: '' }));
+  await assert.rejects(loadConfig(), /stationQueryParam.*stringa non vuota/);
+
+  mockConfig(t, jsonResponse({ stations: [station], stationQueryParam: 42 }));
+  await assert.rejects(loadConfig(), /stationQueryParam.*deve essere una stringa/);
+});
+
+test('valida e normalizza il parametro URL per la correzione manuale', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: '  offset  ' }));
+  assert.equal((await loadConfig()).playbackOffsetQueryParam, 'offset');
+
+  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: '' }));
+  await assert.rejects(loadConfig(), /playbackOffsetQueryParam.*stringa non vuota/);
+
+  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: 42 }));
+  await assert.rejects(loadConfig(), /playbackOffsetQueryParam.*deve essere una stringa/);
+
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    stationQueryParam: 'selection',
+    playbackOffsetQueryParam: 'selection',
+  }));
+  await assert.rejects(loadConfig(), /stationQueryParam e playbackOffsetQueryParam.*devono essere diversi/);
 });
 
 test('rifiuta un valore localFallback non booleano', async (t) => {

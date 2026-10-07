@@ -7,6 +7,7 @@ import { createAudioOutputLatencyMonitor } from './audio-output-latency.mjs';
 import {
   loadPlaybackOffset,
   savePlaybackOffset,
+  parsePlaybackOffset,
   PLAYBACK_OFFSET_STEP_MS,
   MAX_PLAYBACK_OFFSET_MS,
 } from './playback-offset.mjs';
@@ -47,6 +48,11 @@ async function start() {
     return;
   }
 
+  if (config.playbackOffsetQueryParam) {
+    playbackOffsetMs = savePlaybackOffset(getPlaybackOffsetFromUrl() ?? 0);
+    updatePlaybackOffsetUrl(true);
+  }
+
   clock = createClock({
     sources: config.timeSources,
     timeoutMs: config.requestTimeoutMs,
@@ -82,13 +88,33 @@ async function start() {
   elements['offset-reset'].addEventListener('click', () => changePlaybackOffset(-playbackOffsetMs));
   elements['station-select'].addEventListener('change', (event) => {
     const station = config.stations.find(({ id }) => id === event.target.value);
-    if (station) loadStation(station);
+    if (station) {
+      updateStationUrl(station);
+      loadStation(station);
+    }
   });
 
   renderStationOptions();
   renderPlaybackOffset();
+  const initialStation = getStationFromUrl();
+  updateStationUrl(initialStation, true);
+  if (config.stationQueryParam || config.playbackOffsetQueryParam) {
+    window.addEventListener('popstate', () => {
+      if (config.stationQueryParam) {
+        const station = getStationFromUrl();
+        updateStationUrl(station, true);
+        if (elements['station-select'].value !== station.id) loadStation(station);
+      }
+      if (config.playbackOffsetQueryParam) {
+        playbackOffsetMs = savePlaybackOffset(getPlaybackOffsetFromUrl() ?? 0);
+        renderPlaybackOffset();
+        if (tunedIn) void realignPlayback();
+        else render();
+      }
+    });
+  }
   await Promise.allSettled([
-    loadStation(config.stations[0]),
+    loadStation(initialStation),
     clock.synchronize(),
   ]);
   renderClockStatus();
@@ -122,6 +148,39 @@ function renderStationOptions() {
   }
   elements['station-select'].replaceChildren(options);
   elements['station-switcher'].hidden = !config.allowStationSwitch || config.stations.length < 2;
+}
+
+function getStationFromUrl() {
+  const stationId = config.stationQueryParam
+    ? new URL(window.location.href).searchParams.get(config.stationQueryParam)
+    : null;
+  return config.stations.find(({ id }) => id === stationId) || config.stations[0];
+}
+
+function updateStationUrl(station, replace = false) {
+  if (!config.stationQueryParam) return;
+
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(config.stationQueryParam) === station.id) return;
+  url.searchParams.set(config.stationQueryParam, station.id);
+  window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', url);
+}
+
+function getPlaybackOffsetFromUrl() {
+  const value = new URL(window.location.href).searchParams.get(config.playbackOffsetQueryParam);
+  return parsePlaybackOffset(value);
+}
+
+function updatePlaybackOffsetUrl(replace = false) {
+  if (!config.playbackOffsetQueryParam) return;
+
+  const url = new URL(window.location.href);
+  const currentValue = url.searchParams.get(config.playbackOffsetQueryParam);
+  const nextValue = playbackOffsetMs === 0 ? null : String(playbackOffsetMs);
+  if (currentValue === nextValue) return;
+  if (nextValue === null) url.searchParams.delete(config.playbackOffsetQueryParam);
+  else url.searchParams.set(config.playbackOffsetQueryParam, nextValue);
+  window.history[replace ? 'replaceState' : 'pushState'](window.history.state, '', url);
 }
 
 async function loadStation(station) {
@@ -423,6 +482,7 @@ function getPlayerOffset(offsetMs) {
 
 function changePlaybackOffset(changeMs) {
   playbackOffsetMs = savePlaybackOffset(playbackOffsetMs + changeMs);
+  updatePlaybackOffsetUrl();
   renderPlaybackOffset();
   if (tunedIn) {
     void realignPlayback();
