@@ -7,7 +7,6 @@ const station = {
   id: 'radio',
   name: 'Radio',
   description: 'Descrizione',
-  manifestUrl: './station.json',
   timelineStartsAt: '2026-01-01T00:00:00Z',
   repeat: false,
 };
@@ -16,8 +15,18 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-function mockConfig(t, response) {
-  t.mock.method(globalThis, 'fetch', async () => response);
+function mockConfig(t, response, { defaultStationCatalogUrl = true } = {}) {
+  t.mock.method(globalThis, 'fetch', async () => {
+    if (!defaultStationCatalogUrl || !response.ok || typeof response.json !== 'function') return response;
+    return {
+      ...response,
+      json: async () => {
+        const config = await response.json();
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return config;
+        return { stationCatalogUrl: './stations.json', ...config };
+      },
+    };
+  });
 }
 
 function jsonResponse(value, status = 200) {
@@ -30,7 +39,7 @@ function jsonResponse(value, status = 200) {
 
 test('carica e normalizza la configurazione con i valori predefiniti', async (t) => {
   mockConfig(t, jsonResponse({
-    stations: [{ ...station, name: ' Radio ', description: ' Descrizione ', manifestUrl: '  ./station.json ' }],
+    stationCatalogUrl: '  ./catalog.json ',
     allowStationSwitch: true,
     timeSources: [{
       name: ' Orologio ',
@@ -41,10 +50,12 @@ test('carica e normalizza la configurazione con i valori predefiniti', async (t)
   }));
 
   assert.deepEqual(await loadConfig(), {
-    stations: [{ ...station }],
+    stationCatalogUrl: './catalog.json',
     allowStationSwitch: true,
     stationQueryParam: null,
-    playbackOffsetQueryParam: null,
+    audioOffsetQueryParam: null,
+    customTimeSourceOnly: false,
+    resyncOnTrackChangeOnly: false,
     timeSources: [{
       name: 'Orologio',
       url: 'https://time.example/api',
@@ -54,8 +65,15 @@ test('carica e normalizza la configurazione con i valori predefiniti', async (t)
     }],
     resyncIntervalMs: 30000,
     requestTimeoutMs: 8000,
+    maxOutputLatencyCompensationMs: 100,
+    outputLatencyRefreshIntervalMs: 30000,
+    enableOutputLatencyCompensation: true,
+    playbackSyncIntervalMs: 50,
     localFallback: true,
     useManifestDurations: false,
+    showPlaybackCalibration: true,
+    showPlaybackOffsetControls: true,
+    showSyncDiagnostics: true,
   });
 });
 
@@ -65,17 +83,83 @@ test('accetta una lista vuota di sorgenti e fallback locale disattivato', async 
     timeSources: [],
     resyncIntervalMs: 15000,
     requestTimeoutMs: 2500,
+    playbackSyncIntervalMs: 100,
     localFallback: false,
   }));
 
   const config = await loadConfig();
   assert.deepEqual(config.timeSources, []);
-  assert.deepEqual(config.stations, [station]);
+  assert.equal(config.stationCatalogUrl, './stations.json');
   assert.equal(config.allowStationSwitch, false);
+  assert.equal(config.customTimeSourceOnly, false);
+  assert.equal(config.resyncOnTrackChangeOnly, false);
   assert.equal(config.resyncIntervalMs, 15000);
   assert.equal(config.requestTimeoutMs, 2500);
+  assert.equal(config.playbackSyncIntervalMs, 100);
+  assert.equal(config.maxOutputLatencyCompensationMs, 100);
+  assert.equal(config.outputLatencyRefreshIntervalMs, 30000);
   assert.equal(config.localFallback, false);
   assert.equal(config.useManifestDurations, false);
+  assert.equal(config.showPlaybackCalibration, true);
+});
+
+test('carica i limiti configurati per la misura della latenza audio', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    maxOutputLatencyCompensationMs: 75,
+    outputLatencyRefreshIntervalMs: 60000,
+    enableOutputLatencyCompensation: false,
+  }));
+
+  const config = await loadConfig();
+  assert.equal(config.maxOutputLatencyCompensationMs, 75);
+  assert.equal(config.outputLatencyRefreshIntervalMs, 60000);
+  assert.equal(config.enableOutputLatencyCompensation, false);
+});
+
+test('rifiuta un valore non booleano per enableOutputLatencyCompensation', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], enableOutputLatencyCompensation: 'false' }));
+  await assert.rejects(loadConfig(), /enableOutputLatencyCompensation.*true o false/);
+});
+
+test('rifiuta limiti non validi per la latenza audio', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], maxOutputLatencyCompensationMs: -1 }));
+  await assert.rejects(loadConfig(), /maxOutputLatencyCompensationMs.*tra 0 e 1000/);
+
+  mockConfig(t, jsonResponse({ stations: [station], maxOutputLatencyCompensationMs: 1001 }));
+  await assert.rejects(loadConfig(), /maxOutputLatencyCompensationMs.*tra 0 e 1000/);
+
+  mockConfig(t, jsonResponse({ stations: [station], outputLatencyRefreshIntervalMs: 500 }));
+  await assert.rejects(loadConfig(), /outputLatencyRefreshIntervalMs.*tra 1000 e/);
+});
+
+test('rifiuta intervalli non validi per il controllo audio', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], playbackSyncIntervalMs: 9 }));
+  await assert.rejects(loadConfig(), /playbackSyncIntervalMs.*tra 10 e 1000/);
+
+  mockConfig(t, jsonResponse({ stations: [station], playbackSyncIntervalMs: 1001 }));
+  await assert.rejects(loadConfig(), /playbackSyncIntervalMs.*tra 10 e 1000/);
+
+  mockConfig(t, jsonResponse({ stations: [station], playbackSyncIntervalMs: '50' }));
+  await assert.rejects(loadConfig(), /playbackSyncIntervalMs.*tra 10 e 1000/);
+});
+
+test('abilita la risincronizzazione solo al cambio traccia', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    resyncOnTrackChangeOnly: true,
+    resyncIntervalMs: 12000,
+  }));
+
+  const config = await loadConfig();
+
+  assert.equal(config.resyncOnTrackChangeOnly, true);
+  assert.equal(config.resyncIntervalMs, 12000);
+});
+
+test('rifiuta un valore non booleano per resyncOnTrackChangeOnly', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], resyncOnTrackChangeOnly: 'yes' }));
+  await assert.rejects(loadConfig(), /resyncOnTrackChangeOnly.*true o false/);
 });
 
 test('disattiva il servizio orario proprietario finché l’URL è vuoto', async (t) => {
@@ -124,6 +208,46 @@ test('prova il servizio orario proprietario per primo quando configurato', async
   assert.equal(config.timeSources[0].name, 'SyncRadio UTC');
   assert.equal(config.timeSources[0].responsePath, 'data.utc');
   assert.deepEqual(config.timeSources.map(({ name }) => name), ['SyncRadio UTC', 'Pubblico']);
+});
+
+test('usa solo il servizio orario proprietario quando configurato in modalità esclusiva', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    customTimeSource: {
+      name: 'Orologio LAN',
+      url: 'http://192.168.1.20:8080/time',
+      responsePath: 'utc',
+    },
+    customTimeSourceOnly: true,
+    timeSources: [{
+      name: 'Pubblico',
+      url: 'https://time.example/api',
+      responsePath: 'utc',
+    }],
+  }));
+
+  const config = await loadConfig();
+
+  assert.equal(config.customTimeSourceOnly, true);
+  assert.deepEqual(config.timeSources.map(({ name }) => name), ['Orologio LAN']);
+});
+
+test('non usa sorgenti orarie pubbliche in modalità esclusiva senza URL personalizzato', async (t) => {
+  mockConfig(t, jsonResponse({
+    stations: [station],
+    customTimeSource: { url: '' },
+    customTimeSourceOnly: true,
+    timeSources: [{
+      name: 'Pubblico',
+      url: 'https://time.example/api',
+      responsePath: 'utc',
+    }],
+  }));
+
+  const config = await loadConfig();
+
+  assert.equal(config.customTimeSourceOnly, true);
+  assert.deepEqual(config.timeSources, []);
 });
 
 test('valida URL e formato del servizio orario proprietario anche se attivato', async (t) => {
@@ -182,18 +306,15 @@ test('rifiuta formati di risposta delle sorgenti orarie non supportati', async (
   await assert.rejects(loadConfig(), /responseFormat deve essere "json" o "text"/);
 });
 
-test('valida metadati, URL e ID univoci delle stazioni', async (t) => {
-  mockConfig(t, jsonResponse({ stations: [] }));
-  await assert.rejects(loadConfig(), /almeno una stazione/);
+test('richiede un URL al catalogo delle stazioni', async (t) => {
+  mockConfig(t, jsonResponse({}), { defaultStationCatalogUrl: false });
+  await assert.rejects(loadConfig(), /richiede stationCatalogUrl/);
 
-  mockConfig(t, jsonResponse({ stations: [station, station] }));
-  await assert.rejects(loadConfig(), /Identificativo duplicato/);
+  mockConfig(t, jsonResponse({ stationCatalogUrl: '  ' }));
+  await assert.rejects(loadConfig(), /richiede stationCatalogUrl/);
 
-  mockConfig(t, jsonResponse({ stations: [{ ...station, name: '' }] }));
-  await assert.rejects(loadConfig(), /richiede id, name, description, manifestUrl e timelineStartsAt/);
-
-  mockConfig(t, jsonResponse({ stations: [{ ...station, timelineStartsAt: '2026-01-01T00:00:00' }] }));
-  await assert.rejects(loadConfig(), /timelineStartsAt.*fuso orario/);
+  mockConfig(t, jsonResponse({ stationCatalogUrl: 42 }));
+  await assert.rejects(loadConfig(), /stationCatalogUrl.*deve essere una stringa/);
 
   mockConfig(t, jsonResponse({ stations: [station], allowStationSwitch: 'true' }));
   await assert.rejects(loadConfig(), /allowStationSwitch.*true o false/);
@@ -210,27 +331,30 @@ test('valida e normalizza il parametro URL per la selezione della stazione', asy
   await assert.rejects(loadConfig(), /stationQueryParam.*deve essere una stringa/);
 });
 
-test('valida e normalizza il parametro URL per la correzione manuale', async (t) => {
-  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: '  offset  ' }));
-  assert.equal((await loadConfig()).playbackOffsetQueryParam, 'offset');
+test('valida e normalizza il parametro URL per l’offset audio host', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], audioOffsetQueryParam: '  audioDelay  ' }));
+  assert.equal((await loadConfig()).audioOffsetQueryParam, 'audioDelay');
 
-  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: '' }));
-  await assert.rejects(loadConfig(), /playbackOffsetQueryParam.*stringa non vuota/);
+  mockConfig(t, jsonResponse({ stations: [station], audioOffsetQueryParam: '' }));
+  await assert.rejects(loadConfig(), /audioOffsetQueryParam.*stringa non vuota/);
 
-  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: 42 }));
-  await assert.rejects(loadConfig(), /playbackOffsetQueryParam.*deve essere una stringa/);
+  mockConfig(t, jsonResponse({ stations: [station], audioOffsetQueryParam: 42 }));
+  await assert.rejects(loadConfig(), /audioOffsetQueryParam.*deve essere una stringa/);
+});
 
-  mockConfig(t, jsonResponse({
-    stations: [station],
-    stationQueryParam: 'selection',
-    playbackOffsetQueryParam: 'selection',
-  }));
-  await assert.rejects(loadConfig(), /stationQueryParam e playbackOffsetQueryParam.*devono essere diversi/);
+test('ignora la vecchia configurazione del parametro URL per l’offset', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], playbackOffsetQueryParam: 'offset' }));
+  assert.equal('playbackOffsetQueryParam' in await loadConfig(), false);
 });
 
 test('rifiuta un valore localFallback non booleano', async (t) => {
   mockConfig(t, jsonResponse({ stations: [station], localFallback: 'true' }));
   await assert.rejects(loadConfig(), /deve essere true o false/);
+});
+
+test('rifiuta un valore customTimeSourceOnly non booleano', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], customTimeSourceOnly: 'true' }));
+  await assert.rejects(loadConfig(), /customTimeSourceOnly.*true o false/);
 });
 
 test('abilita le durate dichiarate e rifiuta un valore non booleano', async (t) => {
@@ -241,14 +365,26 @@ test('abilita le durate dichiarate e rifiuta un valore non booleano', async (t) 
   await assert.rejects(loadConfig(), /useManifestDurations.*true o false/);
 });
 
-test('valida e normalizza la ripetizione per stazione', async (t) => {
-  mockConfig(t, jsonResponse({
-    stations: [{ ...station, repeat: true }],
-  }));
-  assert.equal((await loadConfig()).stations[0].repeat, true);
+test('configura la visibilità della calibrazione guidata', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], showPlaybackCalibration: false }));
+  assert.equal((await loadConfig()).showPlaybackCalibration, false);
 
-  mockConfig(t, jsonResponse({
-    stations: [{ ...station, repeat: 'true' }],
-  }));
-  await assert.rejects(loadConfig(), /stations\[0\]\.repeat deve essere true o false/);
+  mockConfig(t, jsonResponse({ stations: [station], showPlaybackCalibration: 'false' }));
+  await assert.rejects(loadConfig(), /showPlaybackCalibration.*true o false/);
+});
+
+test('configura la visibilità dei comandi di offset manuale', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], showPlaybackOffsetControls: false }));
+  assert.equal((await loadConfig()).showPlaybackOffsetControls, false);
+
+  mockConfig(t, jsonResponse({ stations: [station], showPlaybackOffsetControls: 'false' }));
+  await assert.rejects(loadConfig(), /showPlaybackOffsetControls.*true o false/);
+});
+
+test('configura la visibilità delle metriche di sincronizzazione', async (t) => {
+  mockConfig(t, jsonResponse({ stations: [station], showSyncDiagnostics: false }));
+  assert.equal((await loadConfig()).showSyncDiagnostics, false);
+
+  mockConfig(t, jsonResponse({ stations: [station], showSyncDiagnostics: 'false' }));
+  await assert.rejects(loadConfig(), /showSyncDiagnostics.*true o false/);
 });

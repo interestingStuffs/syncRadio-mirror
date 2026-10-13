@@ -1,4 +1,11 @@
 const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_PLAYBACK_SYNC_INTERVAL_MS = 50;
+const MIN_PLAYBACK_SYNC_INTERVAL_MS = 10;
+const MAX_PLAYBACK_SYNC_INTERVAL_MS = 1000;
+const DEFAULT_OUTPUT_LATENCY_REFRESH_INTERVAL_MS = 30000;
+const DEFAULT_MAX_OUTPUT_LATENCY_COMPENSATION_MS = 100;
+const MAX_OUTPUT_LATENCY_COMPENSATION_MS = 1000;
+const MIN_OUTPUT_LATENCY_REFRESH_INTERVAL_MS = 1000;
 
 export async function loadConfig() {
   const response = await fetch('./config.json', { cache: 'no-store' });
@@ -14,16 +21,28 @@ export async function loadConfig() {
     throw new Error('config.json deve contenere un oggetto JSON.');
   }
 
-  const stations = validateStations(config.stations);
+  const stationCatalogUrl = requireString(config.stationCatalogUrl, 'stationCatalogUrl');
+  if (!stationCatalogUrl) {
+    throw new Error('config.json richiede stationCatalogUrl per il catalogo delle stazioni.');
+  }
   const customTimeSource = config.customTimeSource === undefined
     ? null
     : validateCustomTimeSource(config.customTimeSource);
   const configuredTimeSources = config.timeSources === undefined ? [] : validateTimeSources(config.timeSources);
-  const timeSources = customTimeSource
-    ? [customTimeSource, ...configuredTimeSources]
-    : configuredTimeSources;
+  if (config.customTimeSourceOnly !== undefined && typeof config.customTimeSourceOnly !== 'boolean') {
+    throw new Error('Il valore "customTimeSourceOnly" in config.json deve essere true o false.');
+  }
+  const customTimeSourceOnly = config.customTimeSourceOnly === true;
+  const timeSources = customTimeSourceOnly
+    ? (customTimeSource ? [customTimeSource] : [])
+    : customTimeSource
+      ? [customTimeSource, ...configuredTimeSources]
+      : configuredTimeSources;
   if (config.localFallback !== undefined && typeof config.localFallback !== 'boolean') {
     throw new Error('Il valore "localFallback" in config.json deve essere true o false.');
+  }
+  if (config.resyncOnTrackChangeOnly !== undefined && typeof config.resyncOnTrackChangeOnly !== 'boolean') {
+    throw new Error('Il valore "resyncOnTrackChangeOnly" in config.json deve essere true o false.');
   }
   if (config.allowStationSwitch !== undefined && typeof config.allowStationSwitch !== 'boolean') {
     throw new Error('Il valore "allowStationSwitch" in config.json deve essere true o false.');
@@ -34,63 +53,70 @@ export async function loadConfig() {
   if (config.stationQueryParam !== undefined && !stationQueryParam) {
     throw new Error('Il valore "stationQueryParam" in config.json deve essere una stringa non vuota.');
   }
-  const playbackOffsetQueryParam = config.playbackOffsetQueryParam === undefined
+  const audioOffsetQueryParam = config.audioOffsetQueryParam === undefined
     ? null
-    : requireString(config.playbackOffsetQueryParam, 'playbackOffsetQueryParam');
-  if (config.playbackOffsetQueryParam !== undefined && !playbackOffsetQueryParam) {
-    throw new Error('Il valore "playbackOffsetQueryParam" in config.json deve essere una stringa non vuota.');
-  }
-  if (stationQueryParam && stationQueryParam === playbackOffsetQueryParam) {
-    throw new Error('stationQueryParam e playbackOffsetQueryParam in config.json devono essere diversi.');
+    : requireString(config.audioOffsetQueryParam, 'audioOffsetQueryParam');
+  if (config.audioOffsetQueryParam !== undefined && !audioOffsetQueryParam) {
+    throw new Error('Il valore "audioOffsetQueryParam" in config.json deve essere una stringa non vuota.');
   }
   if (config.useManifestDurations !== undefined && typeof config.useManifestDurations !== 'boolean') {
     throw new Error('Il valore "useManifestDurations" in config.json deve essere true o false.');
   }
+  if (config.showPlaybackCalibration !== undefined && typeof config.showPlaybackCalibration !== 'boolean') {
+    throw new Error('Il valore "showPlaybackCalibration" in config.json deve essere true o false.');
+  }
+  if (config.showPlaybackOffsetControls !== undefined && typeof config.showPlaybackOffsetControls !== 'boolean') {
+    throw new Error('Il valore "showPlaybackOffsetControls" in config.json deve essere true o false.');
+  }
+  if (config.showSyncDiagnostics !== undefined && typeof config.showSyncDiagnostics !== 'boolean') {
+    throw new Error('Il valore "showSyncDiagnostics" in config.json deve essere true o false.');
+  }
+  if (config.enableOutputLatencyCompensation !== undefined
+    && typeof config.enableOutputLatencyCompensation !== 'boolean') {
+    throw new Error('Il valore "enableOutputLatencyCompensation" in config.json deve essere true o false.');
+  }
+  const maxOutputLatencyCompensationMs = boundedNumber(
+    config.maxOutputLatencyCompensationMs,
+    DEFAULT_MAX_OUTPUT_LATENCY_COMPENSATION_MS,
+    0,
+    MAX_OUTPUT_LATENCY_COMPENSATION_MS,
+    'maxOutputLatencyCompensationMs',
+  );
+  const outputLatencyRefreshIntervalMs = boundedNumber(
+    config.outputLatencyRefreshIntervalMs,
+    DEFAULT_OUTPUT_LATENCY_REFRESH_INTERVAL_MS,
+    MIN_OUTPUT_LATENCY_REFRESH_INTERVAL_MS,
+    Number.MAX_SAFE_INTEGER,
+    'outputLatencyRefreshIntervalMs',
+  );
+  const playbackSyncIntervalMs = boundedNumber(
+    config.playbackSyncIntervalMs,
+    DEFAULT_PLAYBACK_SYNC_INTERVAL_MS,
+    MIN_PLAYBACK_SYNC_INTERVAL_MS,
+    MAX_PLAYBACK_SYNC_INTERVAL_MS,
+    'playbackSyncIntervalMs',
+  );
 
   return {
-    stations,
+    stationCatalogUrl,
     allowStationSwitch: config.allowStationSwitch === true,
     stationQueryParam,
-    playbackOffsetQueryParam,
+    audioOffsetQueryParam,
     useManifestDurations: config.useManifestDurations === true,
+    showPlaybackCalibration: config.showPlaybackCalibration !== false,
+    showPlaybackOffsetControls: config.showPlaybackOffsetControls !== false,
+    showSyncDiagnostics: config.showSyncDiagnostics !== false,
     timeSources,
+    customTimeSourceOnly,
+    resyncOnTrackChangeOnly: config.resyncOnTrackChangeOnly === true,
     resyncIntervalMs: positiveNumber(config.resyncIntervalMs, 30000),
     requestTimeoutMs: positiveNumber(config.requestTimeoutMs, DEFAULT_TIMEOUT_MS),
+    maxOutputLatencyCompensationMs,
+    outputLatencyRefreshIntervalMs,
+    enableOutputLatencyCompensation: config.enableOutputLatencyCompensation !== false,
+    playbackSyncIntervalMs,
     localFallback: config.localFallback !== false,
   };
-}
-
-function validateStations(value) {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error('stations in config.json deve essere una lista contenente almeno una stazione.');
-  }
-
-  const ids = new Set();
-  return value.map((station, index) => {
-    const label = `stations[${index}]`;
-    if (!station || typeof station !== 'object' || Array.isArray(station)) {
-      throw new Error(`${label} deve essere un oggetto.`);
-    }
-
-    const id = requireString(station.id, `${label}.id`);
-    const name = requireString(station.name, `${label}.name`);
-    const description = requireString(station.description, `${label}.description`);
-    const manifestUrl = requireString(station.manifestUrl, `${label}.manifestUrl`);
-    const timelineStartsAt = requireString(station.timelineStartsAt, `${label}.timelineStartsAt`);
-    if (station.repeat !== undefined && typeof station.repeat !== 'boolean') {
-      throw new Error(`${label}.repeat deve essere true o false.`);
-    }
-    if (!id || !name || !description || !manifestUrl || !timelineStartsAt) {
-      throw new Error(`${label} richiede id, name, description, manifestUrl e timelineStartsAt.`);
-    }
-    if (!hasTimezone(timelineStartsAt) || !Number.isFinite(Date.parse(timelineStartsAt))) {
-      throw new Error(`${label}.timelineStartsAt deve essere una data ISO 8601 valida con fuso orario.`);
-    }
-    if (ids.has(id)) throw new Error(`Identificativo duplicato in config.json: ${id}.`);
-    ids.add(id);
-
-    return { id, name, description, manifestUrl, timelineStartsAt, repeat: station.repeat === true };
-  });
 }
 
 function requireString(value, name) {
@@ -103,8 +129,14 @@ function positiveNumber(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-function hasTimezone(value) {
-  return /T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.test(value);
+function boundedNumber(value, fallback, minimum, maximum, name) {
+  if (value === undefined) return fallback;
+  if (!Number.isFinite(value) || value < minimum || value > maximum) {
+    throw new Error(
+      `Il valore "${name}" in config.json deve essere un numero tra ${minimum} e ${maximum}.`,
+    );
+  }
+  return value;
 }
 
 function validateTimeSources(value) {

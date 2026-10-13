@@ -214,6 +214,18 @@ main { padding-top: 52px; }
 .tune-button:focus-visible, .sync-reset-button:focus-visible, input:focus-visible { outline: 3px solid #80b9a6; outline-offset: 3px; }
 .tune-button:disabled { cursor: not-allowed; opacity: 0.5; }
 .button-icon { width: 13px; text-align: center; font-size: 12px; }
+.tune-button.is-loading .button-icon {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: tune-spinner 800ms linear infinite;
+}
+
+@keyframes tune-spinner {
+  to { transform: rotate(360deg); }
+}
 
 .sync-reset-button {
   min-height: 42px;
@@ -256,6 +268,7 @@ main { padding-top: 52px; }
 .volume-control input { width: 104px; height: 4px; accent-color: var(--accent); cursor: pointer; }
 
 .playback-offset { display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--muted); }
+.playback-offset[hidden] { display: none; }
 .offset-label { margin-right: 4px; font: 10px var(--mono); }
 .playback-offset output { min-width: 66px; color: var(--ink); font: 12px var(--mono); font-variant-numeric: tabular-nums; text-align: center; }
 .offset-button, .offset-reset { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--ink); cursor: pointer; }
@@ -264,6 +277,22 @@ main { padding-top: 52px; }
 .offset-button:hover:not(:disabled), .offset-reset:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-dark); }
 .offset-button:focus-visible, .offset-reset:focus-visible { outline: 3px solid #80b9a6; outline-offset: 2px; }
 .offset-button:disabled, .offset-reset:disabled { cursor: not-allowed; opacity: 0.4; }
+
+.offset-calibration { margin-top: 12px; color: var(--muted); font-size: 12px; }
+.offset-calibration summary { width: fit-content; cursor: pointer; color: var(--accent-dark); }
+.offset-calibration summary:focus-visible, .calibration-button:focus-visible { outline: 3px solid #80b9a6; outline-offset: 3px; }
+.calibration-content { max-width: 440px; padding: 8px 0 0; }
+.calibration-content > p { margin: 0 0 10px; line-height: 1.5; }
+.calibration-cue { display: flex; min-height: 26px; align-items: center; gap: 9px; margin: 10px 0; font: 11px var(--mono); }
+.calibration-step { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #c3d2cc; transition: background-color 80ms ease, transform 80ms ease; }
+.calibration-step.is-active { transform: scale(1.35); background: var(--accent); }
+.calibration-flash { width: 16px; height: 16px; flex: 0 0 auto; border: 1px solid var(--accent); border-radius: 50%; background: var(--accent); opacity: 0.2; transition: opacity 900ms ease-out, box-shadow 900ms ease-out; }
+.calibration-flash.is-active { opacity: 1; box-shadow: 0 0 0 4px #14725d26; transition: none; }
+.calibration-controls { display: flex; flex-wrap: wrap; gap: 7px; }
+.calibration-button { min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--ink); cursor: pointer; font-size: 11px; }
+.calibration-button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-dark); }
+.calibration-button:disabled { cursor: not-allowed; opacity: 0.45; }
+.calibration-status { margin: 9px 0 0 !important; color: var(--muted); font-size: 11px; }
 
 .player-error, .configuration-error { margin: 15px 0 0; color: var(--accent-dark); font-size: 12px; line-height: 1.55; }
 
@@ -345,7 +374,9 @@ main { padding-top: 52px; }
 .schedule-item time { color: var(--muted); font: 11px var(--mono); font-variant-numeric: tabular-nums; }
 .schedule-track-title { overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-artist { overflow: hidden; margin-top: 3px; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-timing { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .schedule-duration { color: var(--muted); font: 10px var(--mono); }
+.schedule-next-occurrence { color: var(--accent-dark); font: 9px var(--mono); white-space: nowrap; }
 .schedule-empty { padding: 18px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .schedule-footnote { margin: 14px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 
@@ -399,4 +430,5 @@ main { padding-top: 52px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+  .tune-button.is-loading .button-icon { animation-duration: 2s; }
 }

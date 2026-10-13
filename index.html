@@ -48,7 +48,7 @@
           <div class="track-timing"><span id="elapsed-time">--:--</span><span id="remaining-time">--:--</span></div>
 
           <div class="player-controls">
-            <button class="tune-button" id="tune-button" type="button" disabled>
+            <button class="tune-button" id="tune-button" type="button" aria-busy="false" disabled>
               <span class="button-icon" id="button-icon" aria-hidden="true">▶</span>
               <span id="button-label">Sintonizzati</span>
             </button>
@@ -60,7 +60,7 @@
                   <path class="volume-muted" d="m16 9 5 6m0-6-5 6"></path>
                 </svg>
               </button>
-              <input id="volume-slider" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume locale">
+              <input id="volume-slider" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volume locale">
             </div>
           </div>
           <div class="sync-reset-controls">
@@ -69,13 +69,38 @@
             </button>
           </div>
           <p class="sync-reset-status" id="sync-reset-status" role="status" aria-live="polite" hidden></p>
-          <div class="playback-offset" aria-label="Correzione della sincronizzazione audio">
-            <span class="offset-label">OFFSET AUDIO</span>
+          <div class="playback-offset" id="playback-offset-controls" aria-label="Correzione della sincronizzazione audio">
+            <span class="offset-label">OFFSET (può essere necessario regolare se usi il bluetooth)</span>
             <button class="offset-button" id="offset-decrease" type="button" aria-label="Ritarda audio di 50 millisecondi" title="Ritarda audio di 50 ms">−</button>
             <output id="playback-offset" aria-live="polite">0 ms</output>
             <button class="offset-button" id="offset-increase" type="button" aria-label="Anticipa audio di 50 millisecondi" title="Anticipa audio di 50 ms">+</button>
             <button class="offset-reset" id="offset-reset" type="button" aria-label="Azzera offset audio" title="Azzera offset audio">↺</button>
           </div>
+          <details class="offset-calibration" id="offset-calibration">
+            <summary>Calibra a orecchio</summary>
+            <div class="calibration-content">
+              <p>Confronta il beep con il flash. Se il beep arriva dopo, anticipa l’audio; se arriva prima, ritardalo. Passi di 50 ms, fino a ±500 ms per test.</p>
+              <div class="calibration-cue" id="calibration-cue" aria-hidden="true">
+                <span class="calibration-step calibration-step-before"></span>
+                <span class="calibration-step calibration-step-before"></span>
+                <span class="calibration-step calibration-step-before"></span>
+                <span class="calibration-step calibration-step-before"></span>
+                <span class="calibration-step calibration-step-before"></span>
+                <span class="calibration-flash" id="calibration-flash"></span>
+                <span class="calibration-step calibration-step-after"></span>
+                <span class="calibration-step calibration-step-after"></span>
+                <span class="calibration-step calibration-step-after"></span>
+                <span class="calibration-step calibration-step-after"></span>
+                <span class="calibration-step calibration-step-after"></span>
+              </div>
+              <div class="calibration-controls">
+                <button class="calibration-button" id="calibration-toggle" type="button" aria-pressed="false">Avvia test</button>
+                <button class="calibration-button" id="calibration-earlier" type="button" disabled>Beep prima</button>
+                <button class="calibration-button" id="calibration-later" type="button" disabled>Beep dopo</button>
+              </div>
+              <p class="calibration-status" id="calibration-status" role="status" aria-live="polite">Il test è indicativo: dipende anche da schermo, uscita audio e percezione personale.</p>
+            </div>
+          </details>
           <p class="player-error" id="player-error" role="status" hidden></p>
           <p class="configuration-error" id="configuration-error" role="alert" hidden></p>
 
@@ -96,7 +121,7 @@
         </aside>
       </section>
 
-      <details class="sync-diagnostics" aria-labelledby="diagnostics-title">
+      <details class="sync-diagnostics" id="sync-diagnostics" aria-labelledby="diagnostics-title">
         <summary class="diagnostics-heading">
           <span class="diagnostics-copy">
             <span class="eyebrow">TELEMETRIA DELLA SINCRONIZZAZIONE</span>
@@ -121,7 +146,11 @@
             <dd id="diagnostics-utc">--</dd>
           </div>
           <div>
-            <dt>Ultimo campione API</dt>
+            <dt>Ultima risincronizzazione completata</dt>
+            <dd id="diagnostics-synchronized-at">--</dd>
+          </div>
+          <div>
+            <dt>Campione API usato (RTT minimo)</dt>
             <dd id="diagnostics-sample">--</dd>
           </div>
           <div>
@@ -139,6 +168,34 @@
           <div>
             <dt>Latenza d’uscita stimata</dt>
             <dd id="diagnostics-output-latency">Non misurata</dd>
+          </div>
+          <div>
+            <dt>Offset audio personale</dt>
+            <dd id="diagnostics-personal-audio-offset">0 ms</dd>
+          </div>
+          <div>
+            <dt>Offset audio host (URL)</dt>
+            <dd id="diagnostics-host-audio-offset">0 ms</dd>
+          </div>
+          <div>
+            <dt>Correzione audio effettiva</dt>
+            <dd id="diagnostics-effective-audio-offset">0 ms</dd>
+          </div>
+          <div>
+            <dt>Intervallo controllo audio</dt>
+            <dd id="diagnostics-playback-interval">In attesa</dd>
+          </div>
+          <div>
+            <dt>Controlli ultimi 60 secondi</dt>
+            <dd id="diagnostics-playback-checks">0</dd>
+          </div>
+          <div class="diagnostics-wide">
+            <dt>Scarto audio e correzioni ultimi 60 secondi</dt>
+            <dd id="diagnostics-playback-drift">In attesa della riproduzione stabile</dd>
+          </div>
+          <div>
+            <dt>Correzioni oltre 10 ms</dt>
+            <dd id="diagnostics-playback-corrections">0</dd>
           </div>
           <div class="diagnostics-wide">
             <dt>Tentativi sulle API configurate</dt>

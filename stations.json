@@ -1,0 +1,52 @@
+{
+  "stations": [
+    {
+      "id": "ottoni",
+      "name": "traccia ottoni",
+      "description": "power to the people",
+      "timelineStartsAt": "2026-10-09T06:00:30.000Z",
+      "repeat": true,
+      "tracks": [
+        {
+          "id": "1",
+          "title": "song 1",
+          "artist": "no name",
+          "audioUrl": "samples/audio/song/trombe.mp3",
+          "duration": "04:18"
+        }
+      ]
+    },
+    {
+      "id": "percussioni",
+      "name": "traccia percussioni",
+      "description": "power to the people",
+      "timelineStartsAt": "2026-10-09T06:00:30.000Z",
+      "repeat": true,
+      "tracks": [
+        {
+          "id": "1",
+          "title": "song 1",
+          "artist": "no name",
+          "audioUrl": "samples/audio/song/percussioni.mp3",
+          "duration": "04:18"
+        }
+      ]
+    },
+    {
+      "id": "basso",
+      "name": "traccia basso",
+      "description": "power to the people",
+      "timelineStartsAt": "2026-10-09T06:00:30.000Z",
+      "repeat": true,
+      "tracks": [
+        {
+          "id": "1",
+          "title": "song 1",
+          "artist": "no name",
+          "audioUrl": "samples/audio/song/basso.mp3",
+          "duration": "04:18"
+        }
+      ]
+    }
+  ]
+}

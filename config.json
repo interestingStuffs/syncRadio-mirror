@@ -1,49 +1,19 @@
 {
   "allowStationSwitch": true,
   "stationQueryParam": "station",
-  "playbackOffsetQueryParam": "offset",
+  "audioOffsetQueryParam": "audioOffsetMs",
   "useManifestDurations": true,
+  "showPlaybackOffsetControls": true,
+  "showPlaybackCalibration": false,
+  "showSyncDiagnostics": false,
   "customTimeSource": {
     "name": "SyncRadio · UTC",
-    "url": "",
-    "responsePath": "utc",
-    "timeZonePath": "",
-    "responseFormat": "json"
+    "url": "https://broad-star-53e8.magicalcrowd.workers.dev/",
+    "responsePath": "dateTime",
+    "timeZonePath": "timeZone"
   },
-  "stations": [
-    {
-      "id": "percussioni",
-      "name": "Percussioni",
-      "description": "percussioni varie",
-      "manifestUrl": "samples/percussioni.csv",
-      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
-      "repeat": true
-    },
-    {
-      "id": "basso",
-      "name": "Basso",
-      "description": "Linea di basso",
-      "manifestUrl": "samples/basso.csv",
-      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
-      "repeat": true
-    },
-    {
-      "id": "trombe",
-      "name": "Trombe",
-      "description": "Melodia ottoni",
-      "manifestUrl": "samples/trombe.csv",
-      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
-      "repeat": true
-    },
-    {
-      "id": "metronomo",
-      "name": "Metronomo",
-      "description": "Per essere a tempo",
-      "manifestUrl": "samples/metronomo.csv",
-      "timelineStartsAt": "2026-10-06T11:20:30.000Z",
-      "repeat": true
-    }
-  ],
+  "customTimeSourceOnly": true,
+  "stationCatalogUrl": "stations.json",
   "timeSources": [
     {
       "name": "TimeAPI.io · UTC",
@@ -65,7 +35,12 @@
       "timeZonePath": ""
     }
   ],
+  "resyncOnTrackChangeOnly": true,
   "resyncIntervalMs": 15000,
+  "playbackSyncIntervalMs": 50,
   "requestTimeoutMs": 5000,
+  "enableOutputLatencyCompensation": true,
+  "maxOutputLatencyCompensationMs": 500,
+  "outputLatencyRefreshIntervalMs": 10000,
   "localFallback": false
 }
